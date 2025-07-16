@@ -3,13 +3,35 @@ import { combineReducers } from './combineReducers';
 import authReducer from './authSlice';
 import chatroomsReducer from './chatroomsSlice';
 import messagesReducer from './messagesSlice';
+import messagesPaginationReducer from './messagesPaginationSlice';
 import uiReducer from './uiSlice';
-import type { AuthState, ChatroomsState, MessagesState, UiState, RootState, AppActions } from '../types';
+import type { AuthState, ChatroomsState, MessagesState, MessagesPaginationState, UiState, RootState, AppActions, AuthActions, ChatroomsActions, MessagesActions, UiActions } from '../types';
+
+// Type-safe reducer wrappers
+const typedAuthReducer = (state: AuthState | undefined, action: AppActions): AuthState => {
+  return authReducer(state as AuthState, action as AuthActions);
+};
+
+const typedChatroomsReducer = (state: ChatroomsState | undefined, action: AppActions): ChatroomsState => {
+  return chatroomsReducer(state as ChatroomsState, action as ChatroomsActions);
+};
+
+const typedMessagesReducer = (state: MessagesState | undefined, action: AppActions): MessagesState => {
+  return messagesReducer(state as MessagesState, action as MessagesActions);
+};
+
+const typedMessagesPaginationReducer = (state: MessagesPaginationState | undefined, action: AppActions): MessagesPaginationState => {
+  return messagesPaginationReducer(state as MessagesPaginationState, action as MessagesActions);
+};
+
+const typedUiReducer = (state: UiState | undefined, action: AppActions): UiState => {
+  return uiReducer(state as UiState, action as UiActions);
+};
 
 // Initial state for each slice
 const initialAuthState: AuthState = {
   isAuthenticated: false,
-  phone: null,
+  user: null,
   otpVerified: false,
 };
 
@@ -24,6 +46,8 @@ const initialChatroomsState: ChatroomsState = {
 };
 
 const initialMessagesState: MessagesState = {}; // Messages indexed by chatroomId
+
+const initialMessagesPaginationState: MessagesPaginationState = {}; // Pagination state indexed by chatroomId
 
 const initialUiState: UiState = {
   darkMode: false,
@@ -41,13 +65,15 @@ export const initialRootState: RootState = {
   auth: initialAuthState,
   chatrooms: initialChatroomsState,
   messages: initialMessagesState,
+  messagesPagination: initialMessagesPaginationState,
   ui: initialUiState,
 };
 
 // Root reducer combines all individual reducers
 export const rootReducer = combineReducers<RootState, AppActions>({
-  auth: authReducer as any, // Type assertion as combineReducers is generic
-  chatrooms: chatroomsReducer as any,
-  messages: messagesReducer as any,
-  ui: uiReducer as any,
+  auth: typedAuthReducer,
+  chatrooms: typedChatroomsReducer,
+  messages: typedMessagesReducer,
+  messagesPagination: typedMessagesPaginationReducer,
+  ui: typedUiReducer,
 });

@@ -1,6 +1,125 @@
+/* Import Google Font - Poppins */
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @import "tailwindcss";
+@theme {
+  --text-color-dark: #e3e3e3;
+  --subheading-color-dark: #828282;
+  --placeholder-color-dark: #a6a6a6;
+  --primary-color-dark: #242424;
+  --secondary-color-dark: #383838;
+  --secondary-hover-color-dark: #444;
+
+  --text-color-light: #222;
+  --subheading-color-light: #a0a0a0;
+  --placeholder-color-light: #6c6c6c;
+  --primary-color-light: #fff;
+  --secondary-color-light: #e9eef6;
+  --secondary-hover-color-light: #dbe1ea;
+}
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Material Symbols Rounded Font */
+.material-symbols-rounded {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Icon styling for theme toggle */
+.icon {
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Set Poppins as default font and apply theme variables */
+body {
+  font-family: 'Poppins', sans-serif;
+  background: var(--primary-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Define CSS variables for shimmer theming and theme colors */
+:root {
+  /* Dark mode colors */
+  --text-color: #e3e3e3;
+  --subheading-color: #828282;
+  --placeholder-color: #a6a6a6;
+  --primary-color: #242424;
+  --secondary-color: #383838;
+  --secondary-hover-color: #444;
+  
+  /* Shimmer variables */
+  --shimmer-highlight: #4285f4;
+  --shimmer-base-light: #e5e7eb;
+  --shimmer-base-dark: #4b5563;
+}
+
+.light_mode {
+  /* Light mode colors */
+  --text-color: #222;
+  --subheading-color: #a0a0a0;
+  --placeholder-color: #6c6c6c;
+  --primary-color: #fff;
+  --secondary-color: #e9eef6;
+  --secondary-hover-color: #dbe1ea;
+}
+
+/* Key animation for the avatar rotation */
+@keyframes rotate {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Key animation for the shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* Styles for the loading animation components */
+.loading .avatar {
+  animation: rotate 2s linear infinite;
+}
+
+.loading .loading-bar {
+  background: linear-gradient(to right, 
+    var(--shimmer-base-light) 20%, 
+    var(--shimmer-highlight) 50%, 
+    var(--shimmer-base-light) 80%
+  );
+  background-size: 2000px 100%;
+  animation: shimmer 2.5s linear infinite;
+}
+
+/* Dark mode shimmer */
+.dark .loading .loading-bar {
+  background: linear-gradient(to right, 
+    var(--shimmer-base-dark) 20%, 
+    var(--shimmer-highlight) 50%, 
+    var(--shimmer-base-dark) 80%
+  );
+  background-size: 2000px 100%;
+}

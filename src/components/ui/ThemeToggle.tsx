@@ -1,6 +1,6 @@
 // src/components/ui/ThemeToggle.tsx
 import React, { useEffect } from 'react';
-import { useGlobalDispatch, useGlobalState } from '../../App';
+import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
 
 const ThemeToggle: React.FC = () => {
   const dispatch = useGlobalDispatch();
@@ -10,8 +10,10 @@ const ThemeToggle: React.FC = () => {
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
+      document.body.classList.remove('light_mode');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.add('light_mode');
     }
     localStorage.setItem('theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
@@ -26,10 +28,13 @@ const ThemeToggle: React.FC = () => {
   return (
     <button
       onClick={() => dispatch({ type: 'ui/toggleDarkMode' })}
-      className="p-2 rounded-md hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors duration-200"
+      className="w-10 h-10 flex-shrink-0 cursor-pointer rounded-full flex items-center justify-center bg-[var(--secondary-hover-color)] hover:bg-[var(--primary-color)] transition-colors duration-200 focus:outline-none"
       aria-label="Toggle dark mode"
+      id="theme-toggle-button"
     >
-      {darkMode ? '☀️' : '🌙'}
+      <span className="icon material-symbols-rounded text-[var(--text-color)]">
+        {darkMode ? 'light_mode' : 'dark_mode'}
+      </span>
     </button>
   );
 };

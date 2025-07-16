@@ -1,24 +1,41 @@
 // src/components/chat/ChatroomPage.tsx
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useGlobalDispatch, useGlobalState } from '../../App';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
+import { useMessagePagination } from '../../hooks/useMessagePagination';
 import ThemeToggle from '../ui/ThemeToggle';
-import LoadingSkeleton from '../ui/LoadingSkeleton';
+import ShimmerEffect from '../ui/ShimmerEffect';
+import MessageItem from './MessageItem';
 import useThrottle from '../../hooks/useThrottle';
+import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
 import type { Message, Chatroom } from '../../types';
 
-interface ChatroomPageProps {
-  onBackToDashboard: () => void;
-}
-
-const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
+const ChatroomPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { id: chatroomId } = useParams<{ id: string }>();
   const dispatch = useGlobalDispatch();
-  const { chatrooms, messages, ui } = useGlobalState();
-  const selectedChatroomId = chatrooms.selectedChatroomId;
-  const isLoadingOlderMessages = ui.loading.messageSend;
+  const { chatrooms, ui } = useGlobalState();
+  const selectedChatroomId = chatroomId; // Use route parameter instead of global state
+
+  // Use the pagination hook for message management
+  const {
+    currentMessages,
+    isLoading: isLoadingOlderMessages,
+    hasMore,
+  } = useMessagePagination(selectedChatroomId);
+
   const isTyping = ui.isTyping;
 
-  const chatroom: Chatroom | undefined = chatrooms.list.find(room => room.id === selectedChatroomId);
-  const currentChatMessages: Message[] = messages[selectedChatroomId || ''] || [];
+  const chatroom: Chatroom | undefined = chatrooms.list.find(
+    (room) => room.id === selectedChatroomId
+  );
+
+  // Update the selected chatroom in global state when route changes
+  useEffect(() => {
+    if (chatroomId) {
+      dispatch({ type: 'chatrooms/selectChatroom', payload: chatroomId });
+    }
+  }, [chatroomId, dispatch]);
 
   const [messageInput, setMessageInput] = useState<string>('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -26,55 +43,80 @@ const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const lastAiResponseTime = useRef<number>(0);
+  const isInitialLoad = useRef<boolean>(true);
+  const hasScrolledManually = useRef<boolean>(false);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({
+        behavior: smooth ? 'smooth' : 'instant',
+        block: 'end',
+      });
+    }
   }, []);
 
+  // Initialize scroll to bottom immediately when chatroom changes
   useEffect(() => {
-    if (!isLoadingOlderMessages) {
-      scrollToBottom();
-    }
-  }, [currentChatMessages, isLoadingOlderMessages, scrollToBottom]);
-
-  const fetchOlderMessages = useCallback(async () => {
-    if (isLoadingOlderMessages) return;
-
-    dispatch({ type: 'ui/setLoading', payload: { messageSend: true } });
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    const dummyOlderMessages: Message[] = [];
-
-    if (dummyOlderMessages.length > 0) {
-      dispatch({ type: 'messages/prependMessages', payload: { chatroomId: selectedChatroomId!, messages: dummyOlderMessages.reverse() } });
-    }
-    dispatch({ type: 'ui/setLoading', payload: { messageSend: false } });
-  }, [dispatch, isLoadingOlderMessages, selectedChatroomId]);
-
-  useEffect(() => {
-    const chatContainer = chatContainerRef.current;
-    if (!chatContainer) return;
-
-    const handleScroll = () => {
-      if (chatContainer.scrollTop === 0 && !isLoadingOlderMessages && currentChatMessages.length > 0) {
-        fetchOlderMessages();
+    if (selectedChatroomId) {
+      isInitialLoad.current = true;
+      hasScrolledManually.current = false;
+      
+      // Set container to bottom immediately to prevent visual jump
+      const chatContainer = chatContainerRef.current;
+      if (chatContainer) {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
       }
-    };
+    }
+  }, [selectedChatroomId]);
 
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => chatContainer.removeEventListener('scroll', handleScroll);
-  }, [fetchOlderMessages, isLoadingOlderMessages, currentChatMessages.length]);
+  // Handle initial messages load - ensure stays at bottom
+  useEffect(() => {
+    if (currentMessages.length > 0 && isInitialLoad.current && !isLoadingOlderMessages) {
+      // Multiple attempts to ensure scroll to bottom on initial load
+      const scrollToBottomImmediate = () => {
+        const chatContainer = chatContainerRef.current;
+        if (chatContainer) {
+          chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+        scrollToBottom(false);
+      };
+      
+      // Immediate scroll
+      scrollToBottomImmediate();
+      
+      // Backup scroll after short delay
+      setTimeout(() => {
+        scrollToBottomImmediate();
+        isInitialLoad.current = false;
+      }, 100);
+    }
+  }, [currentMessages.length, isLoadingOlderMessages, scrollToBottom]);
 
-  const sendAiResponseThrottled = useThrottle((userMessage: string) => {
+  // Auto-scroll for new messages only if user hasn't manually scrolled up
+  useEffect(() => {
+    if (!isLoadingOlderMessages && !isInitialLoad.current && currentMessages.length > 0) {
+      const chatContainer = chatContainerRef.current;
+      if (chatContainer && !hasScrolledManually.current) {
+        // Check if user is near bottom (within 200px)
+        const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 200;
+        if (isNearBottom) {
+          scrollToBottom(true);
+        }
+      }
+    }
+  }, [currentMessages.length, isLoadingOlderMessages, scrollToBottom]);
+
+  const sendAiResponseThrottled = useThrottle(() => {
     const aiResponses: string[] = [
       "That's an interesting point!",
-      "I understand. How can I assist further?",
-      "Could you elaborate on that?",
+      'I understand. How can I assist further?',
+      'Could you elaborate on that?',
       "I'm still learning, but I'll do my best to help.",
-      "Thanks for your message!",
+      'Thanks for your message!',
       "I'm here to chat. What's on your mind?",
     ];
-    const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
+    const randomResponse =
+      aiResponses[Math.floor(Math.random() * aiResponses.length)] || "I'm here to help!";
 
     const aiMessage: Message = {
       id: Date.now() + '-ai',
@@ -83,7 +125,10 @@ const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
       timestamp: new Date().toLocaleTimeString(),
       type: 'text',
     };
-    dispatch({ type: 'messages/addMessage', payload: { chatroomId: selectedChatroomId!, message: aiMessage } });
+    dispatch({
+      type: 'messages/addMessage',
+      payload: { chatroomId: selectedChatroomId!, message: aiMessage },
+    });
     dispatch({ type: 'ui/setTypingIndicator', payload: false });
     lastAiResponseTime.current = Date.now();
   }, 2000);
@@ -101,8 +146,14 @@ const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
       type: selectedImage ? 'image' : 'text',
     };
 
-    dispatch({ type: 'messages/addMessage', payload: { chatroomId: selectedChatroomId!, message: newMessage } });
-    dispatch({ type: 'chatrooms/addMessageToChatroom', payload: { chatroomId: selectedChatroomId!, messageId: newMessage.id } });
+    dispatch({
+      type: 'messages/addMessage',
+      payload: { chatroomId: selectedChatroomId!, message: newMessage },
+    });
+    dispatch({
+      type: 'chatrooms/addMessageToChatroom',
+      payload: { chatroomId: selectedChatroomId!, messageId: newMessage.id },
+    });
 
     setMessageInput('');
     setSelectedImage(null);
@@ -112,7 +163,7 @@ const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
 
     const delay = Math.random() * 2000 + 1000;
     setTimeout(() => {
-      sendAiResponseThrottled(newMessage.content);
+      sendAiResponseThrottled();
     }, delay);
 
     dispatch({ type: 'ui/setLoading', payload: { messageSend: false } });
@@ -135,127 +186,246 @@ const ChatroomPage: React.FC<ChatroomPageProps> = ({ onBackToDashboard }) => {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      dispatch({ type: 'ui/addToast', payload: { message: 'Message copied!', type: 'info' } });
-    }).catch(err => {
-      console.error('Failed to copy text: ', err);
-      dispatch({ type: 'ui/addToast', payload: { message: 'Failed to copy message.', type: 'error' } });
-    });
-  };
+  const copyToClipboard = useCallback(
+    (text: string) => {
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          dispatch({ type: 'ui/addToast', payload: { message: 'Message copied!', type: 'info' } });
+        })
+        .catch((err) => {
+          console.error('Failed to copy text: ', err);
+          dispatch({
+            type: 'ui/addToast',
+            payload: { message: 'Failed to copy message.', type: 'error' },
+          });
+        });
+    },
+    [dispatch]
+  );
+
+  // Keyboard shortcuts for better accessibility
+  useKeyboardShortcuts({
+    enter: () => {
+      if (messageInput.trim() || selectedImage) {
+        handleSendMessage();
+      }
+    },
+    'ctrl+enter': () => {
+      if (messageInput.trim() || selectedImage) {
+        handleSendMessage();
+      }
+    },
+    escape: () => {
+      if (selectedImage) {
+        setSelectedImage(null);
+      }
+    },
+    'ctrl+b': () => {
+      navigate('/dashboard');
+    },
+    'ctrl+k': () => {
+      document.querySelector<HTMLInputElement>('input[type="text"]')?.focus();
+    },
+  });
 
   if (!chatroom) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-900">
-        <p className="text-xl text-slate-600 dark:text-slate-400">Chatroom not found. Please go back to dashboard.</p>
-        <button
-          onClick={onBackToDashboard}
-          className="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-200"
-        >
-          Go to Dashboard
-        </button>
+      <div
+        className="min-h-screen flex items-center justify-center bg-[var(--primary-color)]"
+        role="alert"
+      >
+        <div className="text-center">
+          <p className="text-xl text-[var(--subheading-color)] mb-4">
+            Chatroom not found. Please go back to dashboard.
+          </p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-colors duration-200 focus:outline-none"
+            aria-label="Navigate back to dashboard"
+          >
+            Go to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-      <header className="bg-white dark:bg-slate-800 shadow-md p-4 flex justify-between items-center">
+    <div className="flex flex-col h-screen bg-[var(--primary-color)] text-[var(--text-color)]">
+      <header
+        className="fixed top-0 left-0 right-0 z-10 bg-[var(--primary-color)] p-4 flex justify-between items-center"
+        role="banner"
+      >
         <button
           onClick={() => {
-            onBackToDashboard();
-            dispatch({ type: 'messages/clearMessages' });
+            navigate('/dashboard');
           }}
-          className="text-blue-600 dark:text-blue-400 hover:underline flex items-center"
+          className="flex items-center gap-2 px-3 py-2 rounded-full bg-[var(--secondary-color)] hover:bg-[var(--secondary-hover-color)] text-[var(--text-color)] transition-all duration-200 focus:outline-none hover:shadow-md"
+          aria-label="Navigate back to dashboard"
         >
-          &larr; Back
+          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+          <span className="font-medium">Back</span>
         </button>
-        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{chatroom.title}</h2>
+        <h1 className="text-2xl font-bold text-[var(--text-color)]" aria-live="polite">
+          {chatroom.title}
+        </h1>
         <ThemeToggle />
       </header>
 
-      <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-        {isLoadingOlderMessages && (
-          <div className="text-center py-2">
-            <LoadingSkeleton count={3} className="h-12 w-full mb-2" />
-          </div>
-        )}
-        {currentChatMessages.map((msg: Message) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className={`relative p-3 rounded-lg shadow-md max-w-[70%] group ${
-              msg.sender === 'user'
-                ? 'bg-blue-500 text-white rounded-br-none'
-                : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-200 rounded-bl-none'
-            }`}>
-              {msg.type === 'text' && msg.content && <p className="text-sm break-words">{msg.content}</p>}
-              {msg.type === 'image' && msg.image && (
-                <img src={msg.image} alt="Uploaded" className="max-w-full h-auto rounded-md mt-2" />
-              )}
-              <span className={`block text-xs mt-1 ${msg.sender === 'user' ? 'text-blue-100' : 'text-slate-500 dark:text-slate-400'}`}>
-                {msg.timestamp}
-              </span>
-              <button
-                onClick={() => copyToClipboard(msg.content)}
-                className="absolute top-1 right-1 p-1 rounded-full bg-slate-300/50 dark:bg-slate-600/50 text-slate-800 dark:text-slate-200 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                aria-label="Copy message"
-              >
-                📋
-              </button>
+      <main className="flex-1 flex items-center flex-col pt-17 pb-20 bg-[var(--primary-color)]" role="main">
+        <div
+          ref={chatContainerRef}
+          className="flex-1 max-w-4xl size-full overflow-y-auto p-4 space-y-4 custom-scrollbar bg-[var(--primary-color)]"
+          role="log"
+          aria-label="Chat messages"
+          aria-live="polite"
+          style={{ 
+            scrollBehavior: isInitialLoad.current ? 'auto' : 'smooth',
+            overscrollBehavior: 'contain'
+          }}
+        >
+          {isLoadingOlderMessages && (
+            <div className="text-center py-4" aria-label="Loading older messages">
+              <div className="flex items-center justify-center gap-2 text-[var(--subheading-color)]">
+                <div className="animate-spin inline-block w-4 h-4 border-2 border-[var(--subheading-color)] border-solid rounded-full border-r-transparent"></div>
+                <span className="text-sm">Loading older messages...</span>
+              </div>
             </div>
-          </div>
-        ))}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="p-3 rounded-lg shadow-md bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-200 rounded-bl-none text-sm italic">
-              Gemini is typing...
+          )}
+          {!hasMore && currentMessages.length > 0 && (
+            <div className="text-center py-4 text-[var(--subheading-color)] text-sm">
+              You've reached the beginning of the conversation
             </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+          )}
 
-      <div className="p-4 bg-white dark:bg-slate-800 shadow-lg flex items-center space-x-2">
-        <input
-          type="text"
-          placeholder="Type a message..."
-          value={messageInput}
-          onChange={(e) => setMessageInput(e.target.value)}
-          onKeyPress={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+          {/* Empty state when no messages */}
+          {currentMessages.length === 0 && !isLoadingOlderMessages && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center py-12 px-6 max-w-md mx-auto">
+                <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-[var(--secondary-color)] flex items-center justify-center">
+                  <span className="material-symbols-rounded text-[48px] text-[var(--text-color)] opacity-60">chat_bubble_outline</span>
+                </div>
+                <h3 className="text-2xl font-semibold text-[var(--text-color)] mb-3">
+                  Start the conversation
+                </h3>
+                <p className="text-[var(--subheading-color)] mb-8 leading-relaxed text-base">
+                  Send your first message to get started with AI assistance. Ask anything you'd like
+                  to know!
+                </p>
+                <div className="inline-flex items-center gap-3 px-6 py-3 bg-[var(--secondary-color)] hover:bg-[var(--secondary-hover-color)] text-[var(--text-color)] rounded-2xl text-sm font-medium transition-colors duration-200 shadow-sm">
+                  <span className="material-symbols-rounded text-[20px] text-blue-500">lightbulb</span>
+                  <span>Type your message below and press Enter</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {currentMessages.map((msg: Message) => (
+            <MessageItem key={msg.id} message={msg} onCopyMessage={copyToClipboard} />
+          ))}
+          {isTyping && (
+              <ShimmerEffect />
+          )}
+          {/* Scroll anchor for auto-scroll to bottom */}
+          <div ref={messagesEndRef} style={{ height: '1px' }} />
+        </div>
+
+        <div className="fixed w-full left-0 bottom-0 z-10 p-4 bg-[var(--primary-color)]">
+          {/* Image Preview */}
+          {selectedImage && (
+            <div className="max-w-4xl mx-auto mb-3">
+              <div className="flex items-center gap-3 p-3 bg-[var(--secondary-color)] rounded-2xl">
+                <div className="relative">
+                  <img
+                    src={selectedImage}
+                    alt="Selected image preview"
+                    className="w-12 h-12 object-cover rounded-lg"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-[var(--text-color)] font-medium">Image selected</p>
+                  <p className="text-xs text-[var(--subheading-color)]">Ready to send with your message</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedImage(null)}
+                  className="p-1 rounded-full hover:bg-[var(--secondary-hover-color)] text-[var(--text-color)] transition-colors duration-200 focus:outline-none"
+                  aria-label="Remove selected image"
+                >
+                  <span className="material-symbols-rounded text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <form
+            className="max-w-4xl mx-auto flex gap-3"
+            onSubmit={(e) => {
               e.preventDefault();
               handleSendMessage();
-            }
-          }}
-          className="flex-1 p-3 border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-200 focus:ring-blue-500 focus:border-blue-500"
-        />
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          accept="image/*"
-        />
-        <button
-          onClick={handleImageUploadClick}
-          className="p-3 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors duration-200"
-          aria-label="Upload image"
-        >
-          🖼️
-        </button>
-        <button
-          onClick={handleSendMessage}
-          disabled={ui.loading.messageSend || (!messageInput.trim() && !selectedImage)}
-          className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
-          aria-label="Send message"
-        >
-          {ui.loading.messageSend ? (
-            <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-solid rounded-full border-r-transparent"></span>
-          ) : '🚀'}
-        </button>
-      </div>
+            }}
+            role="form"
+            aria-label="Send message form"
+          >
+            <div className="relative flex-1 h-14">
+              <input
+                type="text"
+                placeholder="Ask Gemini"
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                className="w-full h-full border-none outline-none resize-none text-base text-[var(--text-color)] py-4 pr-16 pl-6 rounded-full bg-[var(--secondary-color)] placeholder-[var(--placeholder-color)] focus:bg-[var(--secondary-hover-color)] transition-colors duration-200"
+                aria-label="Type your message"
+                disabled={ui.loading.messageSend}
+                required
+              />
+              <button
+                type="submit"
+                disabled={ui.loading.messageSend || (!messageInput.trim() && !selectedImage)}
+                className={`absolute right-0 top-0 w-14 h-14 flex-shrink-0 cursor-pointer rounded-full flex text-xl text-[var(--text-color)] items-center justify-center bg-transparent border-none outline-none transition-transform duration-200 ${
+                  messageInput.trim() || selectedImage ? 'scale-100' : 'scale-0'
+                }`}
+                aria-label="Send message"
+              >
+                {ui.loading.messageSend ? (
+                  <span
+                    className="animate-spin inline-block w-5 h-5 border-2 border-[var(--text-color)] border-solid rounded-full border-r-transparent"
+                    aria-label="Sending message"
+                  ></span>
+                ) : (
+                  <span className="material-symbols-rounded">send</span>
+                )}
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleImageUploadClick}
+                className="w-14 h-14 flex-shrink-0 cursor-pointer rounded-full flex text-xl text-[var(--text-color)] items-center justify-center bg-[var(--secondary-color)] hover:bg-[var(--secondary-hover-color)] transition-colors duration-200"
+                aria-label="Upload image"
+                disabled={ui.loading.messageSend}
+              >
+                <span className="material-symbols-rounded">image</span>
+              </button>
+            </div>
+          </form>
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="hidden"
+            accept="image/*"
+            aria-label="Upload image file"
+          />
+        </div>
+      </main>
+      <div ref={messagesEndRef} />
     </div>
   );
 };

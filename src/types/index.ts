@@ -1,7 +1,13 @@
-// src/types/index.ts
 export interface Country {
     name: string;
     dial_code: string;
+  }
+
+  export interface User {
+    id: string; // Full phone number with country code
+    phone: string; // Full phone number with country code  
+    password: string; // Hashed password (in real app)
+    createdAt: string;
   }
   
   export interface Toast {
@@ -28,7 +34,7 @@ export interface Country {
   // Redux-like State Interfaces
   export interface AuthState {
     isAuthenticated: boolean;
-    phone: string | null;
+    user: User | null;
     otpVerified: boolean;
     otp?: string | null;
     otpExpiry?: number | null;
@@ -40,8 +46,19 @@ export interface Country {
     searchTerm: string;
   }
   
+  export interface MessagesPagination {
+    hasMore: boolean;
+    isLoading: boolean;
+    page: number;
+    totalMessages: number;
+  }
+
   export interface MessagesState {
     [chatroomId: string]: Message[];
+  }
+
+  export interface MessagesPaginationState {
+    [chatroomId: string]: MessagesPagination;
   }
   
   export interface UiState {
@@ -59,15 +76,17 @@ export interface Country {
     auth: AuthState;
     chatrooms: ChatroomsState;
     messages: MessagesState;
+    messagesPagination: MessagesPaginationState;
     ui: UiState;
   }
   
   // Action Types
   export type AuthActions =
-    | { type: 'auth/loginSuccess'; payload: { userId: string } }
+    | { type: 'auth/loginSuccess'; payload: { user: User } }
     | { type: 'auth/logout' }
     | { type: 'auth/setOtp'; payload: { otp: string; otpExpiry: number } }
-    | { type: 'auth/clearOtp' };
+    | { type: 'auth/clearOtp' }
+    | { type: 'auth/signUpSuccess'; payload: { user: User } };
   
   export type ChatroomsActions =
     | { type: 'chatrooms/addChatroom'; payload: Chatroom }
@@ -79,7 +98,11 @@ export interface Country {
   export type MessagesActions =
     | { type: 'messages/addMessage'; payload: { chatroomId: string; message: Message } }
     | { type: 'messages/prependMessages'; payload: { chatroomId: string; messages: Message[] } }
-    | { type: 'messages/clearMessages' };
+    | { type: 'messages/setInitialMessages'; payload: { chatroomId: string; messages: Message[]; hasMore: boolean; totalMessages: number } }
+    | { type: 'messages/clearMessages' }
+    | { type: 'messagesPagination/setLoading'; payload: { chatroomId: string; isLoading: boolean } }
+    | { type: 'messagesPagination/updatePagination'; payload: { chatroomId: string; hasMore: boolean; page: number; totalMessages: number } }
+    | { type: 'messagesPagination/resetPagination'; payload: { chatroomId: string } };
   
   export type UiActions =
     | { type: 'ui/toggleDarkMode' }

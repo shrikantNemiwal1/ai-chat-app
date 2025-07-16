@@ -1,20 +1,29 @@
 // src/redux/messagesSlice.ts
-import type { Message, MessagesState, MessagesActions } from '../types';
+import type { MessagesState, MessagesActions } from '../types';
 
 const messagesReducer = (state: MessagesState, action: MessagesActions): MessagesState => {
   switch (action.type) {
-    case 'messages/addMessage':
+    case 'messages/addMessage': {
       const { chatroomId, message } = action.payload;
       return {
         ...state,
         [chatroomId]: [...(state[chatroomId] || []), message],
       };
-    case 'messages/prependMessages':
+    }
+    case 'messages/setInitialMessages': {
+      const { chatroomId, messages } = action.payload;
+      return {
+        ...state,
+        [chatroomId]: messages,
+      };
+    }
+    case 'messages/prependMessages': {
       const { chatroomId: prependChatroomId, messages: newMessages } = action.payload;
       return {
         ...state,
         [prependChatroomId]: [...newMessages, ...(state[prependChatroomId] || [])],
       };
+    }
     case 'messages/clearMessages':
       // This action clears all messages from the state for simplicity on chatroom exit
       return {};

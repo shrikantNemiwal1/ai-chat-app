@@ -14,9 +14,12 @@ export const combineReducers = <S extends RootState, A extends AppActions>(
     let hasChanged = false;
     const nextState: Partial<S> = {};
 
-    for (let key in reducers) {
+    for (const key in reducers) {
       const previousStateForKey = state ? state[key] : undefined;
-      const nextStateForKey = reducers[key](previousStateForKey as any, action); // Type assertion for slice state
+      const nextStateForKey = reducers[key](
+        previousStateForKey as S[typeof key], 
+        action
+      ); // Type assertion for slice state
       nextState[key] = nextStateForKey;
       hasChanged = hasChanged || nextStateForKey !== previousStateForKey;
     }

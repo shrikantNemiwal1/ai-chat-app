@@ -1,5 +1,5 @@
 // src/redux/chatroomsSlice.ts
-import type { Chatroom, ChatroomsState, ChatroomsActions } from '../types';
+import type { ChatroomsState, ChatroomsActions } from '../types';
 
 const chatroomsReducer = (state: ChatroomsState, action: ChatroomsActions): ChatroomsState => {
   switch (action.type) {

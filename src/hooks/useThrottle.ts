@@ -1,11 +1,11 @@
 // src/hooks/useThrottle.ts
 import { useRef, useCallback } from 'react';
 
-type CallbackFunction<T extends any[]> = (...args: T) => void;
+type CallbackFunction<T extends readonly unknown[]> = (...args: T) => void;
 
-const useThrottle = <T extends any[]>(callback: CallbackFunction<T>, delay: number): CallbackFunction<T> => {
+const useThrottle = <T extends readonly unknown[]>(callback: CallbackFunction<T>, delay: number): CallbackFunction<T> => {
   const lastCall = useRef<number>(0);
-  const timeoutId = useRef<NodeJS.Timeout | null>(null);
+  const timeoutId = useRef<number | null>(null);
 
   return useCallback((...args: T) => {
     const now = Date.now();
@@ -16,7 +16,7 @@ const useThrottle = <T extends any[]>(callback: CallbackFunction<T>, delay: numb
       if (timeoutId.current) {
         clearTimeout(timeoutId.current);
       }
-      timeoutId.current = setTimeout(() => {
+      timeoutId.current = window.setTimeout(() => {
         lastCall.current = Date.now();
         callback(...args);
       }, delay - (now - lastCall.current));

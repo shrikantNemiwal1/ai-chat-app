@@ -4,9 +4,11 @@ import type { AuthState, AuthActions } from '../types';
 const authReducer = (state: AuthState, action: AuthActions): AuthState => {
   switch (action.type) {
     case 'auth/loginSuccess':
-      return { ...state, isAuthenticated: true, phone: action.payload.userId, otpVerified: true };
+      return { ...state, isAuthenticated: true, user: action.payload.user, otpVerified: true };
+    case 'auth/signUpSuccess':
+      return { ...state, isAuthenticated: true, user: action.payload.user, otpVerified: true };
     case 'auth/logout':
-      return { ...state, isAuthenticated: false, phone: null, otpVerified: false, otp: null, otpExpiry: null };
+      return { ...state, isAuthenticated: false, user: null, otpVerified: false, otp: null, otpExpiry: null };
     case 'auth/setOtp':
       return { ...state, otp: action.payload.otp, otpExpiry: action.payload.otpExpiry };
     case 'auth/clearOtp':

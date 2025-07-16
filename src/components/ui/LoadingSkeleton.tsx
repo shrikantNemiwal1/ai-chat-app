@@ -10,7 +10,12 @@ const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({ count = 1, className 
   return (
     <>
       {[...Array(count)].map((_, i) => (
-        <div key={i} className={`animate-pulse bg-slate-300 dark:bg-slate-700 rounded-md ${className}`}></div>
+        <div 
+          key={i} 
+          className={`animate-pulse bg-[var(--secondary-hover-color)] rounded-2xl ${className}`}
+          role="status"
+          aria-label="Loading content"
+        ></div>
       ))}
     </>
   );

@@ -1,4 +1,3 @@
-// src/redux/uiSlice.ts
 import type { UiState, UiActions, Toast } from '../types';
 
 const uiReducer = (state: UiState, action: UiActions): UiState => {
