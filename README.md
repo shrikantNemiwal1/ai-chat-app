@@ -4,14 +4,20 @@ A fully functional, responsive conversational AI chat application built with Rea
 
 ## 🚀 Live Demo
 
-**[View Live Application](https://your-deployment-url.vercel.app)**
+**[View Live Application](https://ai-chat-app-1.netlify.app/)**
 
 ## 📸 Screenshots
 
-![Login Page](./screenshots/login.png)
-![Dashboard](./screenshots/dashboard.png)
-![Chat Interface](./screenshots/chat.png)
-![Mobile View](./screenshots/mobile.png)
+![Login Page](https://github.com/user-attachments/assets/251581db-c858-4cd6-88eb-67a7503348a0)
+![Signup Details Page](https://github.com/user-attachments/assets/d3f5cc28-3f37-4380-9019-4662321cd4cc)
+![Signup OTP Page](https://github.com/user-attachments/assets/4b83a232-7cfb-466f-9e9c-b4bc13a8decb)
+![Dashboard](https://github.com/user-attachments/assets/14a077a4-d980-4f75-aa3e-d46f792836f9)
+![Dashboard Light Mode](https://github.com/user-attachments/assets/6ce9dfe9-d46f-44f5-bd66-242e95582ffd)
+![Create Chatroom Modal](https://github.com/user-attachments/assets/0f903da0-50bf-4fd7-92cf-c7bd9ebd451d)
+![Chat Interface](https://github.com/user-attachments/assets/556a8181-22df-4774-b26a-3ed7b3e25ca9)
+![Chat Interface with Image](https://github.com/user-attachments/assets/a5fed62d-49d1-41c5-a1ec-ad6351af71ae)
+![Chat Interface waiting for response](https://github.com/user-attachments/assets/f03c1ef4-2c4d-46a5-8ac7-82670db06732)
+![Mobile View](https://github.com/user-attachments/assets/336cbbd0-8b0f-4142-b567-30448dfc7677)
 
 ## ✨ Features
 
@@ -59,7 +65,7 @@ A fully functional, responsive conversational AI chat application built with Rea
 | **Styling**          | Tailwind CSS                   |
 | **Form Handling**    | React Hook Form + Zod          |
 | **Routing**          | React Router DOM               |
-| **Development**      | ESLint, TypeScript, Hot Reload |
+| **Development**      | ESLint, TypeScript             |
 
 ## 🏗️ Project Structure
 
