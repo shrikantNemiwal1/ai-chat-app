@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
+import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
+import { signUpSuccess, setOtp, clearOtp } from '../../redux/authSlice';
+import { setLoading, addToast } from '../../redux/uiSlice';
 import { signUpSchema, otpSchema, type SignUpFormData, type OtpFormData } from '../../schemas/authSchemas';
 import { saveUserToStorage, userExists } from '../../utils/userStorage';
 import OtpInput from '../ui/OtpInput';
@@ -19,10 +21,10 @@ const SignUpPage: React.FC = () => {
   const [countryFetchError, setCountryFetchError] = useState<string | null>(null);
   const [signUpData, setSignUpData] = useState<SignUpFormData | null>(null);
 
-  const dispatch = useGlobalDispatch();
-  const { auth, ui } = useGlobalState();
-  const isSendingOtp = ui.loading.otp;
-  const isVerifyingOtp = ui.loading.otp;
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector(state => state.auth);
+  const isSendingOtp = useAppSelector(state => state.ui.loading.otp);
+  const isVerifyingOtp = useAppSelector(state => state.ui.loading.otp);
 
   // React Hook Form for sign up
   const signUpForm = useForm<SignUpFormData>({
@@ -45,7 +47,7 @@ const SignUpPage: React.FC = () => {
 
   useEffect(() => {
     const fetchCountries = async () => {
-      dispatch({ type: 'ui/setLoading', payload: { otp: true } });
+      dispatch(setLoading({ otp: true }));
       setCountryFetchError(null);
       try {
         const response = await fetch('https://restcountries.com/v3.1/all?fields=name,idd');
@@ -81,14 +83,14 @@ const SignUpPage: React.FC = () => {
       } catch (error: unknown) {
         console.error("Error fetching country data:", error);
         setCountryFetchError("Failed to load country data. Please try again later.");
-        dispatch({ type: 'ui/addToast', payload: { message: 'Failed to load country data.', type: 'error' } });
+        dispatch(addToast({ message: 'Failed to load country data.', type: 'error' }));
         setCountries([
           { name: 'United States', dial_code: '+1' },
           { name: 'India', dial_code: '+91' },
         ]);
         signUpForm.setValue('countryCode', '+1');
       } finally {
-        dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+        dispatch(setLoading({ otp: false }));
         setIsLoadingCountries(false);
       }
     };
@@ -97,30 +99,30 @@ const SignUpPage: React.FC = () => {
   }, [dispatch, signUpForm]);
 
   const handleSignUp = async (data: SignUpFormData) => {
-    dispatch({ type: 'ui/setLoading', payload: { otp: true } });
+    dispatch(setLoading({ otp: true }));
     
     const fullPhone = `${data.countryCode}${data.phoneNumber}`;
     
     // Check if user already exists
     if (userExists(fullPhone)) {
-      dispatch({ type: 'ui/addToast', payload: { message: 'Account with this phone number already exists. Please login instead.', type: 'error' } });
-      dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+      dispatch(addToast({ message: 'Account with this phone number already exists. Please login instead.', type: 'error' }));
+      dispatch(setLoading({ otp: false }));
       return;
     }
 
-    dispatch({ type: 'ui/addToast', payload: { message: 'Sending OTP...', type: 'info' } });
+    dispatch(addToast({ message: 'Sending OTP...', type: 'info' }));
 
     await new Promise(resolve => setTimeout(resolve, 1500));
 
     const generatedOtp = Math.floor(1000 + Math.random() * 9000).toString();
     setOtpTimer(60);
 
-    dispatch({ type: 'auth/setOtp', payload: { otp: generatedOtp, otpExpiry: Date.now() + 60000 } });
-    dispatch({ type: 'ui/addToast', payload: { message: `OTP sent: ${generatedOtp} (for testing)`, type: 'success' } });
+    dispatch(setOtp({ otp: generatedOtp, otpExpiry: Date.now() + 60000 }));
+    dispatch(addToast({ message: `OTP sent: ${generatedOtp} (for testing)`, type: 'success' }));
 
     setSignUpData(data);
     setShowOtpInput(true);
-    dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+    dispatch(setLoading({ otp: false }));
   };
 
   useEffect(() => {
@@ -130,8 +132,8 @@ const SignUpPage: React.FC = () => {
         setOtpTimer(prev => prev - 1);
       }, 1000);
     } else if (otpTimer === 0 && showOtpInput) {
-      dispatch({ type: 'ui/addToast', payload: { message: 'OTP expired!', type: 'error' } });
-      dispatch({ type: 'auth/clearOtp' });
+      dispatch(addToast({ message: 'OTP expired!', type: 'error' }));
+      dispatch(clearOtp());
     }
     return () => clearInterval(timerInterval);
   }, [showOtpInput, otpTimer, dispatch]);
@@ -139,8 +141,8 @@ const SignUpPage: React.FC = () => {
   const handleVerifyOtp = async (data: OtpFormData) => {
     if (!signUpData) return;
 
-    dispatch({ type: 'ui/setLoading', payload: { otp: true } });
-    dispatch({ type: 'ui/addToast', payload: { message: 'Verifying OTP...', type: 'info' } });
+    dispatch(setLoading({ otp: true }));
+    dispatch(addToast({ message: 'Verifying OTP...', type: 'info' }));
 
     await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -155,17 +157,17 @@ const SignUpPage: React.FC = () => {
           password: signUpData.password
         });
 
-        dispatch({ type: 'auth/signUpSuccess', payload: { user: newUser } });
-        dispatch({ type: 'ui/addToast', payload: { message: 'Account created successfully!', type: 'success' } });
+        dispatch(signUpSuccess({ user: newUser }));
+        dispatch(addToast({ message: 'Account created successfully!', type: 'success' }));
         navigate('/dashboard');
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Failed to create account.';
-        dispatch({ type: 'ui/addToast', payload: { message: errorMessage, type: 'error' } });
+        dispatch(addToast({ message: errorMessage, type: 'error' }));
       }
     } else {
-      dispatch({ type: 'ui/addToast', payload: { message: 'Invalid or expired OTP.', type: 'error' } });
+      dispatch(addToast({ message: 'Invalid or expired OTP.', type: 'error' }));
     }
-    dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+    dispatch(setLoading({ otp: false }));
   };
 
   const handleBackToSignUp = () => {
@@ -173,7 +175,7 @@ const SignUpPage: React.FC = () => {
     setOtpTimer(0);
     setSignUpData(null);
     otpForm.reset();
-    dispatch({ type: 'auth/clearOtp' });
+    dispatch(clearOtp());
   };
 
   return (

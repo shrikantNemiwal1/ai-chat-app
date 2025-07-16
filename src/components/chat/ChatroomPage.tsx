@@ -1,21 +1,31 @@
 // src/components/chat/ChatroomPage.tsx
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
+import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
+import { selectChatroom } from '../../redux/chatroomsSlice';
+import { addMessage } from '../../redux/messagesSlice';
+import { addMessageToChatroom } from '../../redux/chatroomsSlice';
+import { setLoading, addToast, setTypingIndicator } from '../../redux/uiSlice';
 import { useMessagePagination } from '../../hooks/useMessagePagination';
 import ThemeToggle from '../ui/ThemeToggle';
 import ShimmerEffect from '../ui/ShimmerEffect';
-import MessageItem from './MessageItem';
+import OptimizedMessageList from './OptimizedMessageList';
 import useThrottle from '../../hooks/useThrottle';
 import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
+import useFocusManagement from '../../hooks/useFocusManagement';
 import type { Message, Chatroom } from '../../types';
+import { MESSAGE_CONSTANTS, AI_RESPONSES, SCROLL_BEHAVIOR, KEYBOARD_SHORTCUTS } from '../../constants';
+import { getCurrentTimestamp } from '../../utils/dateUtils';
+import { generateId, generateAiMessageId } from '../../utils/idUtils';
 
 const ChatroomPage: React.FC = () => {
   const navigate = useNavigate();
   const { id: chatroomId } = useParams<{ id: string }>();
-  const dispatch = useGlobalDispatch();
-  const { chatrooms, ui } = useGlobalState();
-  const selectedChatroomId = chatroomId; // Use route parameter instead of global state
+  const dispatch = useAppDispatch();
+  const chatrooms = useAppSelector(state => state.chatrooms.list);
+  const isTyping = useAppSelector(state => state.ui.isTyping);
+  const isMessageSending = useAppSelector(state => state.ui.loading.messageSend);
+  const selectedChatroomId = chatroomId;
 
   // Use the pagination hook for message management
   const {
@@ -24,16 +34,21 @@ const ChatroomPage: React.FC = () => {
     hasMore,
   } = useMessagePagination(selectedChatroomId);
 
-  const isTyping = ui.isTyping;
-
-  const chatroom: Chatroom | undefined = chatrooms.list.find(
-    (room) => room.id === selectedChatroomId
+  const chatroom: Chatroom | undefined = useMemo(() => 
+    chatrooms.find((room) => room.id === selectedChatroomId),
+    [chatrooms, selectedChatroomId]
   );
+
+  // Focus management for accessibility
+  useFocusManagement(true, {
+    autoFocus: false,
+    restoreFocus: true,
+  });
 
   // Update the selected chatroom in global state when route changes
   useEffect(() => {
     if (chatroomId) {
-      dispatch({ type: 'chatrooms/selectChatroom', payload: chatroomId });
+      dispatch(selectChatroom(chatroomId));
     }
   }, [chatroomId, dispatch]);
 
@@ -49,8 +64,8 @@ const ChatroomPage: React.FC = () => {
   const scrollToBottom = useCallback((smooth = true) => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({
-        behavior: smooth ? 'smooth' : 'instant',
-        block: 'end',
+        behavior: smooth ? SCROLL_BEHAVIOR.SMOOTH : SCROLL_BEHAVIOR.INSTANT,
+        block: SCROLL_BEHAVIOR.BLOCK_END,
       });
     }
   }, []);
@@ -88,7 +103,7 @@ const ChatroomPage: React.FC = () => {
       setTimeout(() => {
         scrollToBottomImmediate();
         isInitialLoad.current = false;
-      }, 100);
+      }, MESSAGE_CONSTANTS.SCROLL_TIMEOUT);
     }
   }, [currentMessages.length, isLoadingOlderMessages, scrollToBottom]);
 
@@ -97,8 +112,8 @@ const ChatroomPage: React.FC = () => {
     if (!isLoadingOlderMessages && !isInitialLoad.current && currentMessages.length > 0) {
       const chatContainer = chatContainerRef.current;
       if (chatContainer && !hasScrolledManually.current) {
-        // Check if user is near bottom (within 200px)
-        const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < 200;
+        // Check if user is near bottom (within threshold)
+        const isNearBottom = chatContainer.scrollHeight - chatContainer.scrollTop - chatContainer.clientHeight < MESSAGE_CONSTANTS.SCROLL_THRESHOLD;
         if (isNearBottom) {
           scrollToBottom(true);
         }
@@ -107,66 +122,48 @@ const ChatroomPage: React.FC = () => {
   }, [currentMessages.length, isLoadingOlderMessages, scrollToBottom]);
 
   const sendAiResponseThrottled = useThrottle(() => {
-    const aiResponses: string[] = [
-      "That's an interesting point!",
-      'I understand. How can I assist further?',
-      'Could you elaborate on that?',
-      "I'm still learning, but I'll do my best to help.",
-      'Thanks for your message!',
-      "I'm here to chat. What's on your mind?",
-    ];
-    const randomResponse =
-      aiResponses[Math.floor(Math.random() * aiResponses.length)] || "I'm here to help!";
+    const randomResponse = AI_RESPONSES[Math.floor(Math.random() * AI_RESPONSES.length)] || "I'm here to help!";
 
     const aiMessage: Message = {
-      id: Date.now() + '-ai',
+      id: generateAiMessageId(),
       sender: 'ai',
       content: randomResponse,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: getCurrentTimestamp(),
       type: 'text',
     };
-    dispatch({
-      type: 'messages/addMessage',
-      payload: { chatroomId: selectedChatroomId!, message: aiMessage },
-    });
-    dispatch({ type: 'ui/setTypingIndicator', payload: false });
+    dispatch(addMessage({ chatroomId: selectedChatroomId!, message: aiMessage }));
+    dispatch(setTypingIndicator(false));
     lastAiResponseTime.current = Date.now();
   }, 2000);
 
   const handleSendMessage = async () => {
     if (!messageInput.trim() && !selectedImage) return;
 
-    dispatch({ type: 'ui/setLoading', payload: { messageSend: true } });
+    dispatch(setLoading({ messageSend: true }));
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: generateId(),
       sender: 'user',
       content: messageInput.trim(),
       image: selectedImage,
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: getCurrentTimestamp(),
       type: selectedImage ? 'image' : 'text',
     };
 
-    dispatch({
-      type: 'messages/addMessage',
-      payload: { chatroomId: selectedChatroomId!, message: newMessage },
-    });
-    dispatch({
-      type: 'chatrooms/addMessageToChatroom',
-      payload: { chatroomId: selectedChatroomId!, messageId: newMessage.id },
-    });
+    dispatch(addMessage({ chatroomId: selectedChatroomId!, message: newMessage }));
+    dispatch(addMessageToChatroom({ chatroomId: selectedChatroomId!, messageId: newMessage.id }));
 
     setMessageInput('');
     setSelectedImage(null);
-    dispatch({ type: 'ui/addToast', payload: { message: 'Message sent!', type: 'success' } });
+    dispatch(addToast({ message: 'Message sent!', type: 'success' }));
 
-    dispatch({ type: 'ui/setTypingIndicator', payload: true });
+    dispatch(setTypingIndicator(true));
 
     const delay = Math.random() * 2000 + 1000;
     setTimeout(() => {
       sendAiResponseThrottled();
     }, delay);
 
-    dispatch({ type: 'ui/setLoading', payload: { messageSend: false } });
+    dispatch(setLoading({ messageSend: false }));
   };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,14 +188,11 @@ const ChatroomPage: React.FC = () => {
       navigator.clipboard
         .writeText(text)
         .then(() => {
-          dispatch({ type: 'ui/addToast', payload: { message: 'Message copied!', type: 'info' } });
+          dispatch(addToast({ message: 'Message copied!', type: 'info' }));
         })
         .catch((err) => {
           console.error('Failed to copy text: ', err);
-          dispatch({
-            type: 'ui/addToast',
-            payload: { message: 'Failed to copy message.', type: 'error' },
-          });
+          dispatch(addToast({ message: 'Failed to copy message', type: 'error' }));
         });
     },
     [dispatch]
@@ -211,12 +205,12 @@ const ChatroomPage: React.FC = () => {
         handleSendMessage();
       }
     },
-    'ctrl+enter': () => {
+    [KEYBOARD_SHORTCUTS.SEND_MESSAGE]: () => {
       if (messageInput.trim() || selectedImage) {
         handleSendMessage();
       }
     },
-    escape: () => {
+    [KEYBOARD_SHORTCUTS.ESCAPE]: () => {
       if (selectedImage) {
         setSelectedImage(null);
       }
@@ -299,8 +293,7 @@ const ChatroomPage: React.FC = () => {
             </div>
           )}
 
-          {/* Empty state when no messages */}
-          {currentMessages.length === 0 && !isLoadingOlderMessages && (
+          {currentMessages.length === 0 && !isLoadingOlderMessages ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center py-12 px-6 max-w-md mx-auto">
                 <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-[var(--secondary-color)] flex items-center justify-center">
@@ -319,11 +312,14 @@ const ChatroomPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          ) : (
+            <OptimizedMessageList
+              messages={currentMessages}
+              onCopyMessage={copyToClipboard}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingOlderMessages}
+            />
           )}
-
-          {currentMessages.map((msg: Message) => (
-            <MessageItem key={msg.id} message={msg} onCopyMessage={copyToClipboard} />
-          ))}
           {isTyping && (
               <ShimmerEffect />
           )}
@@ -382,18 +378,18 @@ const ChatroomPage: React.FC = () => {
                 }}
                 className="w-full h-full border-none outline-none resize-none text-base text-[var(--text-color)] py-4 pr-16 pl-6 rounded-full bg-[var(--secondary-color)] placeholder-[var(--placeholder-color)] focus:bg-[var(--secondary-hover-color)] transition-colors duration-200"
                 aria-label="Type your message"
-                disabled={ui.loading.messageSend}
+                disabled={isMessageSending}
                 required
               />
               <button
                 type="submit"
-                disabled={ui.loading.messageSend || (!messageInput.trim() && !selectedImage)}
+                disabled={isMessageSending || (!messageInput.trim() && !selectedImage)}
                 className={`absolute right-0 top-0 w-14 h-14 flex-shrink-0 cursor-pointer rounded-full flex text-xl text-[var(--text-color)] items-center justify-center bg-transparent border-none outline-none transition-transform duration-200 ${
                   messageInput.trim() || selectedImage ? 'scale-100' : 'scale-0'
                 }`}
                 aria-label="Send message"
               >
-                {ui.loading.messageSend ? (
+                {isMessageSending ? (
                   <span
                     className="animate-spin inline-block w-5 h-5 border-2 border-[var(--text-color)] border-solid rounded-full border-r-transparent"
                     aria-label="Sending message"
@@ -409,7 +405,7 @@ const ChatroomPage: React.FC = () => {
                 onClick={handleImageUploadClick}
                 className="w-14 h-14 flex-shrink-0 cursor-pointer rounded-full flex text-xl text-[var(--text-color)] items-center justify-center bg-[var(--secondary-color)] hover:bg-[var(--secondary-hover-color)] transition-colors duration-200"
                 aria-label="Upload image"
-                disabled={ui.loading.messageSend}
+                disabled={isMessageSending}
               >
                 <span className="material-symbols-rounded">image</span>
               </button>

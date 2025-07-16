@@ -1,12 +1,30 @@
-// src/utils/localStorage.ts
+/**
+ * LocalStorage Utilities
+ * 
+ * This module provides utilities for persisting and loading application state
+ * to/from localStorage. It handles serialization, error recovery, and provides
+ * development utilities for state management.
+ * 
+ * @module localStorage
+ */
+
 import type { RootState } from '../types';
 
+/** Storage key for persisting application state in localStorage */
 const STORAGE_KEY = 'geminiCloneState';
 
 /**
- * Loads the persisted state from localStorage
- * @param defaultState The default state to return if no state is found or an error occurs
- * @returns The loaded state or the default state
+ * Loads the persisted state from localStorage with error handling
+ * 
+ * Attempts to retrieve and parse the application state from localStorage.
+ * Returns the default state if no saved state exists or if parsing fails.
+ * 
+ * @param defaultState - The default state to return if loading fails
+ * @returns The loaded state from localStorage or the provided default state
+ * @example
+ * ```typescript
+ * const state = loadPersistedState(initialState);
+ * ```
  */
 export const loadPersistedState = (defaultState: RootState): RootState => {
   try {
@@ -22,9 +40,20 @@ export const loadPersistedState = (defaultState: RootState): RootState => {
 };
 
 /**
- * Saves the state to localStorage
- * @param state The state to save
- * @returns true if successful, false otherwise
+ * Saves the current application state to localStorage
+ * 
+ * Serializes the state object and persists it to localStorage.
+ * Includes error handling for quota exceeded and other storage errors.
+ * 
+ * @param state - The complete application state to persist
+ * @returns True if the save operation was successful, false otherwise
+ * @example
+ * ```typescript
+ * const success = persistState(currentState);
+ * if (!success) {
+ *   console.warn('Failed to save state');
+ * }
+ * ```
  */
 export const persistState = (state: RootState): boolean => {
   try {
@@ -38,7 +67,17 @@ export const persistState = (state: RootState): boolean => {
 };
 
 /**
- * Clears all persisted messages from localStorage (useful for development/testing)
+ * Clears all persisted messages from localStorage
+ * 
+ * Development utility that removes all messages and pagination data
+ * while preserving other state like authentication and UI settings.
+ * Useful for testing and development scenarios.
+ * 
+ * @example
+ * ```typescript
+ * // Clear messages during development/testing
+ * clearPersistedMessages();
+ * ```
  */
 export const clearPersistedMessages = (): void => {
   try {

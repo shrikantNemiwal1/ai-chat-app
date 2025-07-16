@@ -1,6 +1,7 @@
 // src/components/chat/MessageItem.tsx
-import React, { memo } from 'react';
+import React, { memo, useCallback } from 'react';
 import type { Message } from '../../types';
+import { ARIA_ROLES } from '../../constants';
 
 interface MessageItemProps {
   message: Message;
@@ -9,7 +10,7 @@ interface MessageItemProps {
 
 const MessageItem: React.FC<MessageItemProps> = memo(({ message, onCopyMessage }) => {
   // Format timestamp to show only hours and minutes
-  const formatTime = (timestamp: string) => {
+  const formatTime = useCallback((timestamp: string) => {
     try {
       // If timestamp is already in a time format, parse it
       const date = new Date(`1970-01-01 ${timestamp}`);
@@ -28,13 +29,20 @@ const MessageItem: React.FC<MessageItemProps> = memo(({ message, onCopyMessage }
     } catch {
       return timestamp;
     }
-  };
+  }, []);
+
+  const handleCopyMessage = useCallback(() => {
+    onCopyMessage(message.content);
+  }, [message.content, onCopyMessage]);
+
+  const messageLabel = `Message from ${message.sender === 'user' ? 'you' : 'AI assistant'} at ${formatTime(message.timestamp)}`;
+  const imageAlt = `Image uploaded by ${message.sender === 'user' ? 'you' : 'AI assistant'}`;
 
   return (
     <div
       className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-      role="article"
-      aria-label={`Message from ${message.sender === 'user' ? 'you' : 'AI assistant'} at ${message.timestamp}`}
+      role={ARIA_ROLES.ARTICLE}
+      aria-label={messageLabel}
     >
       <div className={`relative px-5 py-4 rounded-3xl max-w-[70%] group ${
         message.sender === 'user'
@@ -44,8 +52,9 @@ const MessageItem: React.FC<MessageItemProps> = memo(({ message, onCopyMessage }
         {message.image && (
           <img 
             src={message.image} 
-            alt={`Image uploaded by ${message.sender === 'user' ? 'you' : 'AI assistant'}`} 
+            alt={imageAlt} 
             className="max-w-full max-h-64 w-auto h-auto rounded-2xl object-cover"
+            loading="lazy"
           />
         )}
         {message.content && (
@@ -58,12 +67,12 @@ const MessageItem: React.FC<MessageItemProps> = memo(({ message, onCopyMessage }
           {formatTime(message.timestamp)}
         </time>
         <button
-          onClick={() => onCopyMessage(message.content)}
-          className="absolute top-1 right-1 p-1 h-[29px] rounded-full bg-[var(--secondary-hover-color)]/50 text-[var(--text-color)] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 focus:outline-none"
-          aria-label={`Copy message: ${message.content.substring(0, 50)}...`}
+          onClick={handleCopyMessage}
+          className="absolute cursor-pointer top-1 right-1 p-1 h-[29px] rounded-full bg-[var(--secondary-hover-color)]/50 text-[var(--text-color)] opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          aria-label={`Copy message: ${message.content.substring(0, 50)}${message.content.length > 50 ? '...' : ''}`}
           tabIndex={0}
         >
-          <span className="material-symbols-rounded text-[20px]">content_copy</span>
+          <span className="material-symbols-rounded text-[20px]" aria-hidden="true">content_copy</span>
         </button>
       </div>
     </div>

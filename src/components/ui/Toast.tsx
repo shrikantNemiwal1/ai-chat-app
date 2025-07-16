@@ -1,6 +1,6 @@
 // src/components/ui/Toast.tsx
 import React, { useEffect } from 'react';
-import type { Toast as ToastType } from '../../types'; // Renamed to avoid conflict
+import type { Toast as ToastType } from '../../types';
 
 interface ToastProps extends ToastType {
   onClose: (id: number) => void;
@@ -23,7 +23,7 @@ const Toast: React.FC<ToastProps> = ({ id, message, type, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
       onClose(id);
-    }, 4000); // Increased to 4 seconds for better UX
+    }, 4000);
     return () => clearTimeout(timer);
   }, [id, onClose]);
 

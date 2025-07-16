@@ -1,19 +1,26 @@
 // src/components/chat/DashboardPage.tsx
-import React, { useState } from 'react';
+import React, { useState, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
+import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
+import { logout } from '../../redux/authSlice';
+import { selectChatroom, setSearchTerm, addChatroom, deleteChatroom } from '../../redux/chatroomsSlice';
+import { setLoading, addToast } from '../../redux/uiSlice';
 import ThemeToggle from '../ui/ThemeToggle';
 import useDebounce from '../../hooks/useDebounce';
 import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
+import useFocusManagement from '../../hooks/useFocusManagement';
 import type { Chatroom } from '../../types';
+import { UI_CONSTANTS, TOAST_MESSAGES, ERROR_MESSAGES, KEYBOARD_SHORTCUTS } from '../../constants';
+import { generateId } from '../../utils/idUtils';
 
-const DashboardPage: React.FC = () => {
+const DashboardPage = memo(() => {
   const navigate = useNavigate();
-  const dispatch = useGlobalDispatch();
-  const { chatrooms, auth, ui } = useGlobalState();
-  const searchTerm = chatrooms.searchTerm;
-  const userId = auth.user?.id;
-  const isCreatingChatroom = ui.loading.chatroomCreate;
+  const dispatch = useAppDispatch();
+  const chatrooms = useAppSelector(state => state.chatrooms.list);
+  const searchTerm = useAppSelector(state => state.chatrooms.searchTerm);
+  const user = useAppSelector(state => state.auth.user);
+  const userId = user?.id;
+  const isCreatingChatroom = useAppSelector(state => state.ui.loading.chatroomCreate);
 
   const [newChatroomTitle, setNewChatroomTitle] = useState<string>('');
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
@@ -21,60 +28,77 @@ const DashboardPage: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [chatroomToDelete, setChatroomToDelete] = useState<{id: string, title: string} | null>(null);
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const debouncedSearchTerm = useDebounce(searchTerm, UI_CONSTANTS.DEBOUNCE_DELAY);
 
-  const filteredChatrooms = chatrooms.list.filter(room =>
-    room.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+  // Memoize filtered chatrooms for performance
+  const filteredChatrooms = useMemo(() => 
+    chatrooms.filter((room: Chatroom) =>
+      room.title.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    ),
+    [chatrooms, debouncedSearchTerm]
   );
 
-  const handleCreateChatroom = async () => {
+  // Focus management for modals
+  const { containerRef: createModalRef } = useFocusManagement(showCreateModal, {
+    trapFocus: true,
+    restoreFocus: true,
+    autoFocus: true,
+  });
+
+  const { containerRef: deleteModalRef } = useFocusManagement(showDeleteModal, {
+    trapFocus: true,
+    restoreFocus: true,
+    autoFocus: true,
+  });
+
+  const handleCreateChatroom = useCallback(async () => {
     if (!newChatroomTitle.trim()) {
-      setCreateFormError('Chatroom title cannot be empty.');
+      setCreateFormError(ERROR_MESSAGES.EMPTY_CHATROOM_TITLE);
       return;
     }
     setCreateFormError('');
-    dispatch({ type: 'ui/setLoading', payload: { chatroomCreate: true } });
-    dispatch({ type: 'ui/addToast', payload: { message: 'Creating chatroom...', type: 'info' } });
+    dispatch(setLoading({ chatroomCreate: true }));
+    dispatch(addToast({ message: TOAST_MESSAGES.CHATROOM_CREATING, type: 'info' }));
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, UI_CONSTANTS.CHATROOM_CREATE_DELAY));
 
     const newRoom: Chatroom = {
-      id: Date.now().toString(),
+      id: generateId(),
       title: newChatroomTitle.trim(),
       messages: [],
     };
-    dispatch({ type: 'chatrooms/addChatroom', payload: newRoom });
-    dispatch({ type: 'ui/addToast', payload: { message: `Chatroom '${newRoom.title}' created!`, type: 'success' } });
+    dispatch(addChatroom(newRoom));
+    dispatch(addToast({ message: TOAST_MESSAGES.CHATROOM_CREATED(newRoom.title), type: 'success' }));
     setNewChatroomTitle('');
     setShowCreateModal(false);
-    dispatch({ type: 'ui/setLoading', payload: { chatroomCreate: false } });
-  };
+    dispatch(setLoading({ chatroomCreate: false }));
+  }, [newChatroomTitle, dispatch]);
 
-  const handleDeleteChatroom = async (id: string, title: string) => {
-    dispatch({ type: 'ui/addToast', payload: { message: `Deleting '${title}'...`, type: 'info' } });
-    await new Promise(resolve => setTimeout(resolve, 800));
-    dispatch({ type: 'chatrooms/deleteChatroom', payload: id });
-    dispatch({ type: 'ui/addToast', payload: { message: `Chatroom '${title}' deleted.`, type: 'success' } });
+  const handleDeleteChatroom = useCallback(async (id: string, title: string) => {
+    dispatch(addToast({ message: TOAST_MESSAGES.CHATROOM_DELETING(title), type: 'info' }));
+    await new Promise(resolve => setTimeout(resolve, UI_CONSTANTS.CHATROOM_DELETE_DELAY));
+    dispatch(deleteChatroom(id));
+    dispatch(addToast({ message: TOAST_MESSAGES.CHATROOM_DELETED(title), type: 'success' }));
     setShowDeleteModal(false);
     setChatroomToDelete(null);
-  };
+  }, [dispatch]);
 
-  const handleDeleteClick = (id: string, title: string) => {
+  const handleDeleteClick = useCallback((id: string, title: string) => {
     setChatroomToDelete({ id, title });
     setShowDeleteModal(true);
-  };
+  }, []);
 
-  const handleLogout = () => {
-    dispatch({ type: 'auth/logout' });
-    dispatch({ type: 'ui/addToast', payload: { message: 'Logged out successfully.', type: 'info' } });
-  };
+  const handleLogout = useCallback(() => {
+    dispatch(logout());
+    dispatch(addToast({ message: TOAST_MESSAGES.LOGOUT_SUCCESS, type: 'info' }));
+  }, [dispatch]);
 
   // Keyboard shortcuts for better accessibility
   useKeyboardShortcuts({
-    'ctrl+n': () => {
+    [KEYBOARD_SHORTCUTS.NEW_CHATROOM]: () => {
       setShowCreateModal(true);
     },
-    'escape': () => {
+    [KEYBOARD_SHORTCUTS.ESCAPE]: () => {
       if (showCreateModal) {
         setShowCreateModal(false);
       } else if (showDeleteModal) {
@@ -82,10 +106,10 @@ const DashboardPage: React.FC = () => {
         setChatroomToDelete(null);
       }
     },
-    'ctrl+f': () => {
+    [KEYBOARD_SHORTCUTS.SEARCH]: () => {
       document.getElementById('chatroom-search')?.focus();
     },
-    'ctrl+l': () => {
+    [KEYBOARD_SHORTCUTS.LOGOUT]: () => {
       handleLogout();
     }
   });
@@ -129,7 +153,7 @@ const DashboardPage: React.FC = () => {
                 type="text"
                 placeholder="Search your chats"
                 value={searchTerm}
-                onChange={(e) => dispatch({ type: 'chatrooms/setSearchTerm', payload: e.target.value })}
+                onChange={(e) => dispatch(setSearchTerm(e.target.value))}
                 className="w-full pl-12 pr-4 py-3 bg-[var(--secondary-color)] border-none rounded-full text-[var(--text-color)] focus:outline-none focus:bg-[var(--secondary-hover-color)] transition-all duration-200 placeholder-[var(--placeholder-color)]"
                 aria-label="Search chatrooms by title"
                 aria-describedby="search-description"
@@ -171,7 +195,7 @@ const DashboardPage: React.FC = () => {
                   role="article"
                   aria-label={`Chatroom: ${room.title}`}
                   onClick={() => {
-                    dispatch({ type: 'chatrooms/selectChatroom', payload: room.id });
+                    dispatch(selectChatroom(room.id));
                     navigate(`/chat/${room.id}`);
                   }}
                 >
@@ -251,7 +275,7 @@ const DashboardPage: React.FC = () => {
             }
           }}
         >
-          <div className="bg-[var(--secondary-color)] rounded-2xl shadow-xl w-full max-w-md">
+          <div ref={createModalRef as React.RefObject<HTMLDivElement>} className="bg-[var(--secondary-color)] rounded-2xl shadow-xl w-full max-w-md">
             <div className="p-6">
               <h2 id="modal-title" className="text-lg font-medium text-[var(--text-color)] mb-4">Create new chat</h2>
               <form onSubmit={(e) => {
@@ -320,7 +344,7 @@ const DashboardPage: React.FC = () => {
             }
           }}
         >
-          <div className="bg-[var(--secondary-color)] rounded-2xl shadow-xl w-full max-w-md">
+          <div ref={deleteModalRef as React.RefObject<HTMLDivElement>} className="bg-[var(--secondary-color)] rounded-2xl shadow-xl w-full max-w-md">
             <div className="p-6">
               <h2 id="delete-modal-title" className="text-lg font-medium text-[var(--text-color)] mb-4">Delete Chat</h2>
               <p className="text-[var(--text-color)] mb-6">
@@ -353,6 +377,6 @@ const DashboardPage: React.FC = () => {
       )}
     </div>
   );
-};
+});
 
 export default DashboardPage;

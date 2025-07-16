@@ -3,7 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useGlobalDispatch, useGlobalState } from '../../hooks/useGlobalContext';
+import { useAppSelector, useAppDispatch } from '../../hooks/useRedux';
+import { loginSuccess } from '../../redux/authSlice';
+import { setLoading, addToast } from '../../redux/uiSlice';
 import { loginSchema, type LoginFormData } from '../../schemas/authSchemas';
 import { authenticateUser } from '../../utils/userStorage';
 import PhoneInput from '../ui/PhoneInput';
@@ -15,9 +17,8 @@ const LoginPage: React.FC = () => {
   const [isLoadingCountries, setIsLoadingCountries] = useState<boolean>(true);
   const [countryFetchError, setCountryFetchError] = useState<string | null>(null);
 
-  const dispatch = useGlobalDispatch();
-  const { ui } = useGlobalState();
-  const isLoggingIn = ui.loading.otp;
+  const dispatch = useAppDispatch();
+  const isLoggingIn = useAppSelector(state => state.ui.loading.otp);
 
   // React Hook Form for login
   const loginForm = useForm<LoginFormData>({
@@ -31,7 +32,7 @@ const LoginPage: React.FC = () => {
 
   useEffect(() => {
     const fetchCountries = async () => {
-      dispatch({ type: 'ui/setLoading', payload: { otp: true } });
+      dispatch(setLoading({ otp: true }));
       setCountryFetchError(null);
       try {
         const response = await fetch('https://restcountries.com/v3.1/all?fields=name,idd');
@@ -67,14 +68,14 @@ const LoginPage: React.FC = () => {
       } catch (error: unknown) {
         console.error("Error fetching country data:", error);
         setCountryFetchError("Failed to load country data. Please try again later.");
-        dispatch({ type: 'ui/addToast', payload: { message: 'Failed to load country data.', type: 'error' } });
+        dispatch(addToast({ message: 'Failed to load country data.', type: 'error' }));
         setCountries([
           { name: 'United States', dial_code: '+1' },
           { name: 'India', dial_code: '+91' },
         ]);
         loginForm.setValue('countryCode', '+1');
       } finally {
-        dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+        dispatch(setLoading({ otp: false }));
         setIsLoadingCountries(false);
       }
     };
@@ -83,8 +84,8 @@ const LoginPage: React.FC = () => {
   }, [dispatch, loginForm]);
 
   const handleLogin = async (data: LoginFormData) => {
-    dispatch({ type: 'ui/setLoading', payload: { otp: true } });
-    dispatch({ type: 'ui/addToast', payload: { message: 'Signing in...', type: 'info' } });
+    dispatch(setLoading({ otp: true }));
+    dispatch(addToast({ message: 'Signing in...', type: 'info' }));
 
     await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -92,14 +93,14 @@ const LoginPage: React.FC = () => {
     const user = authenticateUser(fullPhone, data.password);
 
     if (user) {
-      dispatch({ type: 'auth/loginSuccess', payload: { user } });
-      dispatch({ type: 'ui/addToast', payload: { message: 'Login successful!', type: 'success' } });
+      dispatch(loginSuccess({ user }));
+      dispatch(addToast({ message: 'Login successful!', type: 'success' }));
       navigate('/dashboard');
     } else {
-      dispatch({ type: 'ui/addToast', payload: { message: 'Invalid phone number or password.', type: 'error' } });
+      dispatch(addToast({ message: 'Invalid phone number or password.', type: 'error' }));
     }
     
-    dispatch({ type: 'ui/setLoading', payload: { otp: false } });
+    dispatch(setLoading({ otp: false }));
   };
 
   return (

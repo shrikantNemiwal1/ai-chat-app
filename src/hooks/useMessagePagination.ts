@@ -1,13 +1,21 @@
 // src/hooks/useMessagePagination.ts
-import { useCallback, useEffect } from 'react';
-import { useGlobalDispatch, useGlobalState } from './useGlobalContext';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useAppSelector, useAppDispatch } from './useRedux';
+import { setInitialMessages, prependMessages } from '../redux/messagesSlice';
+import { setLoading, updatePagination, resetPagination as resetPaginationAction, setInitialMessages as setPaginationInitial } from '../redux/messagesPaginationSlice';
+import { addToast } from '../redux/uiSlice';
 import { MockMessageService } from '../utils/mockMessageService';
+import { TOAST_MESSAGES } from '../constants';
 
 export const useMessagePagination = (chatroomId: string | undefined) => {
-  const dispatch = useGlobalDispatch();
-  const { messages, messagesPagination } = useGlobalState();
+  const dispatch = useAppDispatch();
+  const messages = useAppSelector(state => state.messages);
+  const messagesPagination = useAppSelector(state => state.messagesPagination);
   
-  const currentMessages = chatroomId ? messages[chatroomId] || [] : [];
+  const currentMessages = useMemo(() => {
+    return chatroomId ? messages[chatroomId] || [] : [];
+  }, [chatroomId, messages]);
+  
   const pagination = chatroomId ? messagesPagination[chatroomId] : undefined;
   
   const isLoading = pagination?.isLoading || false;
@@ -20,28 +28,26 @@ export const useMessagePagination = (chatroomId: string | undefined) => {
     if (!chatroomId) return;
     
     try {
-      dispatch({ type: 'messagesPagination/setLoading', payload: { chatroomId, isLoading: true } });
+      dispatch(setLoading({ chatroomId, isLoading: true }));
       
       const result = await MockMessageService.loadInitialMessages(chatroomId);
       
-      dispatch({ 
-        type: 'messages/setInitialMessages', 
-        payload: { 
-          chatroomId, 
-          messages: result.messages,
-          hasMore: result.hasMore,
-          totalMessages: result.totalMessages
-        } 
-      });
+      dispatch(setInitialMessages({ 
+        chatroomId, 
+        messages: result.messages
+      }));
+      
+      dispatch(setPaginationInitial({
+        chatroomId,
+        hasMore: result.hasMore,
+        totalMessages: result.totalMessages
+      }));
       
     } catch (error) {
       console.error('Failed to load initial messages:', error);
-      dispatch({ 
-        type: 'ui/addToast', 
-        payload: { message: 'Failed to load messages', type: 'error' } 
-      });
+      dispatch(addToast({ message: TOAST_MESSAGES.MESSAGES_LOAD_FAILED, type: 'error' }));
     } finally {
-      dispatch({ type: 'messagesPagination/setLoading', payload: { chatroomId, isLoading: false } });
+      dispatch(setLoading({ chatroomId, isLoading: false }));
     }
   }, [chatroomId, dispatch]);
 
@@ -52,7 +58,7 @@ export const useMessagePagination = (chatroomId: string | undefined) => {
     }
     
     try {
-      dispatch({ type: 'messagesPagination/setLoading', payload: { chatroomId, isLoading: true } });
+      dispatch(setLoading({ chatroomId, isLoading: true }));
       
       const result = await MockMessageService.loadOlderMessages(
         chatroomId, 
@@ -60,38 +66,29 @@ export const useMessagePagination = (chatroomId: string | undefined) => {
       );
       
       if (result.messages.length > 0) {
-        dispatch({ 
-          type: 'messages/prependMessages', 
-          payload: { chatroomId, messages: result.messages } 
-        });
+        dispatch(prependMessages({ 
+          chatroomId, 
+          messages: result.messages 
+        }));
         
-        dispatch({
-          type: 'messagesPagination/updatePagination',
-          payload: {
-            chatroomId,
-            hasMore: result.hasMore,
-            page: currentPage + 1,
-            totalMessages: result.totalMessages
-          }
-        });
+        dispatch(updatePagination({
+          chatroomId,
+          hasMore: result.hasMore,
+          page: currentPage + 1,
+          totalMessages: result.totalMessages
+        }));
 
-        dispatch({ 
-          type: 'ui/addToast', 
-          payload: { 
-            message: `Loaded ${result.messages.length} older messages`, 
-            type: 'info' 
-          } 
-        });
+        dispatch(addToast({ 
+          message: `Loaded ${result.messages.length} older messages`, 
+          type: 'info' 
+        }));
       }
       
     } catch (error) {
       console.error('Failed to load older messages:', error);
-      dispatch({ 
-        type: 'ui/addToast', 
-        payload: { message: 'Failed to load older messages', type: 'error' } 
-      });
+      dispatch(addToast({ message: TOAST_MESSAGES.OLDER_MESSAGES_LOAD_FAILED, type: 'error' }));
     } finally {
-      dispatch({ type: 'messagesPagination/setLoading', payload: { chatroomId, isLoading: false } });
+      dispatch(setLoading({ chatroomId, isLoading: false }));
     }
   }, [chatroomId, isLoading, hasMore, currentPage, currentMessages.length, dispatch]);
 
@@ -99,30 +96,37 @@ export const useMessagePagination = (chatroomId: string | undefined) => {
   const resetPagination = useCallback(() => {
     if (!chatroomId) return;
     
-    dispatch({ 
-      type: 'messagesPagination/resetPagination', 
-      payload: { chatroomId } 
-    });
+    dispatch(resetPaginationAction({ chatroomId }));
   }, [chatroomId, dispatch]);
 
-  // Initialize pagination state when chatroom changes AND load initial messages
+  // Initialize pagination state when chatroom changes AND load initial messages if needed
   useEffect(() => {
     if (chatroomId && !pagination) {
-      // Clear any existing messages for this chatroom first
-      dispatch({ 
-        type: 'messages/setInitialMessages', 
-        payload: { chatroomId, messages: [], hasMore: true, totalMessages: 0 } 
-      });
+      // Check if we already have messages for this chatroom (from persistence)
+      const existingMessages = currentMessages || [];
       
-      dispatch({ 
-        type: 'messagesPagination/resetPagination', 
-        payload: { chatroomId } 
-      });
-      
-      // Load initial mock messages
-      loadInitialMessages();
+      if (existingMessages.length === 0) {
+        // No existing messages, load mock messages
+        dispatch(setInitialMessages({ 
+          chatroomId, 
+          messages: [] 
+        }));
+        
+        dispatch(resetPaginationAction({ chatroomId }));
+        
+        // Load initial mock messages
+        loadInitialMessages();
+      } else {
+        // We have existing messages (from persistence), just initialize pagination
+        dispatch(resetPaginationAction({ chatroomId }));
+        dispatch(setPaginationInitial({
+          chatroomId,
+          hasMore: false, // Assume no more messages for persisted data
+          totalMessages: existingMessages.length
+        }));
+      }
     }
-  }, [chatroomId, pagination, dispatch, loadInitialMessages]);
+  }, [chatroomId, pagination, currentMessages, dispatch, loadInitialMessages]);
 
   return {
     currentMessages,

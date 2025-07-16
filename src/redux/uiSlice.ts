@@ -1,19 +1,44 @@
-import type { UiState, UiActions, Toast } from '../types';
+// src/redux/uiSlice.ts
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import type { UiState, Toast } from '../types';
 
-const uiReducer = (state: UiState, action: UiActions): UiState => {
-  switch (action.type) {
-    case 'ui/toggleDarkMode':
-      return { ...state, darkMode: !state.darkMode };
-    case 'ui/addToast':
-      return { ...state, toasts: [...state.toasts, { id: Date.now(), ...action.payload } as Toast] };
-    case 'ui/removeToast':
-      return { ...state, toasts: state.toasts.filter(toast => toast.id !== action.payload) };
-    case 'ui/setLoading':
-      return { ...state, loading: { ...state.loading, ...action.payload } };
-    case 'ui/setTypingIndicator':
-      return { ...state, isTyping: action.payload };
-    default:
-      return state;
-  }
+const initialState: UiState = {
+  darkMode: window.matchMedia('(prefers-color-scheme: dark)').matches,
+  toasts: [],
+  loading: {
+    otp: false,
+    chatroomCreate: false,
+    messageSend: false,
+  },
+  isTyping: false,
 };
-export default uiReducer;
+
+const uiSlice = createSlice({
+  name: 'ui',
+  initialState,
+  reducers: {
+    toggleDarkMode: (state) => {
+      state.darkMode = !state.darkMode;
+    },
+    setDarkMode: (state, action: PayloadAction<boolean>) => {
+      state.darkMode = action.payload;
+    },
+    addToast: (state, action: PayloadAction<Omit<Toast, 'id'>>) => {
+      const toast: Toast = { id: Date.now(), ...action.payload };
+      state.toasts.push(toast);
+    },
+    removeToast: (state, action: PayloadAction<number>) => {
+      state.toasts = state.toasts.filter(toast => toast.id !== action.payload);
+    },
+    setLoading: (state, action: PayloadAction<Partial<UiState['loading']>>) => {
+      Object.assign(state.loading, action.payload);
+    },
+    setTypingIndicator: (state, action: PayloadAction<boolean>) => {
+      state.isTyping = action.payload;
+    },
+  },
+});
+
+export const { toggleDarkMode, setDarkMode, addToast, removeToast, setLoading, setTypingIndicator } = uiSlice.actions;
+export default uiSlice.reducer;

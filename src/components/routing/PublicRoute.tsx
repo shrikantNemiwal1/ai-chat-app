@@ -1,16 +1,16 @@
 // src/components/routing/PublicRoute.tsx
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useGlobalState } from '../../hooks/useGlobalContext';
+import { useAppSelector } from '../../hooks/useRedux';
 
 interface PublicRouteProps {
   children: React.ReactNode;
 }
 
 const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
-  const { auth } = useGlobalState();
+  const isAuthenticated = useAppSelector(state => state.auth.isAuthenticated);
   
-  if (auth.isAuthenticated) {
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
   

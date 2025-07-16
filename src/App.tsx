@@ -1,5 +1,7 @@
 // src/App.tsx
-import React, { useEffect, useReducer } from 'react';
+import React from 'react';
+import { Provider } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './components/auth/LoginPage';
 import SignUpPage from './components/auth/SignUpPage';
@@ -7,49 +9,18 @@ import DashboardPage from './components/chat/DashboardPage';
 import ChatroomPage from './components/chat/ChatroomPage';
 import ProtectedRoute from './components/routing/ProtectedRoute';
 import PublicRoute from './components/routing/PublicRoute';
+import RootRedirect from './components/routing/RootRedirect';
 import ToastContainer from './components/ui/ToastContainer';
-import { rootReducer, initialRootState } from './redux/store';
-import { loadPersistedState, persistState, clearPersistedMessages } from './utils/localStorage';
-import { GlobalStateContext, GlobalDispatchContext } from './contexts/GlobalContext';
+import { store, persistor } from './redux/store';
 
 /**
  * Main application component that manages global state and routing
  * between login, dashboard, and chatroom pages.
  */
 const App: React.FC = () => {
-  // Initialize state with persisted data or defaults
-  const [state, dispatch] = useReducer(rootReducer, loadPersistedState(initialRootState));
-
-  // Clear messages on app start for development (to always use fresh mock data)
-  useEffect(() => {
-    // Clear all messages to ensure fresh mock data
-    dispatch({ type: 'messages/clearMessages' });
-  }, []);
-
-  // Persist state to localStorage whenever it changes (exclude messages for development)
-  useEffect(() => {
-    // For development with mock data, don't persist messages to avoid conflicts
-    const stateToPersist = {
-      ...state,
-      messages: {}, // Don't persist mock messages
-      messagesPagination: {} // Don't persist pagination state for mock data
-    };
-    persistState(stateToPersist);
-  }, [state]);
-
-  // Development helper: expose function to clear messages
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as Window & { clearMessages?: () => void }).clearMessages = () => {
-        clearPersistedMessages();
-        window.location.reload();
-      };
-    }
-  }, []);
-
   return (
-    <GlobalStateContext.Provider value={state}>
-      <GlobalDispatchContext.Provider value={dispatch}>
+    <Provider store={store}>
+      <PersistGate loading={null} persistor={persistor}>
         <Router>
           <div className="App">
             <ToastContainer />
@@ -95,7 +66,7 @@ const App: React.FC = () => {
               {/* Redirect root to appropriate page */}
               <Route 
                 path="/" 
-                element={<Navigate to={state.auth.isAuthenticated ? "/dashboard" : "/signup"} replace />} 
+                element={<RootRedirect />} 
               />
               
               {/* Catch all route - redirect to root */}
@@ -106,8 +77,8 @@ const App: React.FC = () => {
             </Routes>
           </div>
         </Router>
-      </GlobalDispatchContext.Provider>
-    </GlobalStateContext.Provider>
+      </PersistGate>
+    </Provider>
   );
 };
 

@@ -1,34 +1,37 @@
 // src/redux/messagesSlice.ts
-import type { MessagesState, MessagesActions } from '../types';
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import type { MessagesState, Message } from '../types';
 
-const messagesReducer = (state: MessagesState, action: MessagesActions): MessagesState => {
-  switch (action.type) {
-    case 'messages/addMessage': {
+const initialState: MessagesState = {};
+
+const messagesSlice = createSlice({
+  name: 'messages',
+  initialState,
+  reducers: {
+    addMessage: (state, action: PayloadAction<{ chatroomId: string; message: Message }>) => {
       const { chatroomId, message } = action.payload;
-      return {
-        ...state,
-        [chatroomId]: [...(state[chatroomId] || []), message],
-      };
-    }
-    case 'messages/setInitialMessages': {
+      if (!state[chatroomId]) {
+        state[chatroomId] = [];
+      }
+      state[chatroomId].push(message);
+    },
+    setInitialMessages: (state, action: PayloadAction<{ chatroomId: string; messages: Message[] }>) => {
       const { chatroomId, messages } = action.payload;
-      return {
-        ...state,
-        [chatroomId]: messages,
-      };
-    }
-    case 'messages/prependMessages': {
-      const { chatroomId: prependChatroomId, messages: newMessages } = action.payload;
-      return {
-        ...state,
-        [prependChatroomId]: [...newMessages, ...(state[prependChatroomId] || [])],
-      };
-    }
-    case 'messages/clearMessages':
-      // This action clears all messages from the state for simplicity on chatroom exit
+      state[chatroomId] = messages;
+    },
+    prependMessages: (state, action: PayloadAction<{ chatroomId: string; messages: Message[] }>) => {
+      const { chatroomId, messages } = action.payload;
+      if (!state[chatroomId]) {
+        state[chatroomId] = [];
+      }
+      state[chatroomId] = [...messages, ...state[chatroomId]];
+    },
+    clearMessages: () => {
       return {};
-    default:
-      return state;
-  }
-};
-export default messagesReducer;
+    },
+  },
+});
+
+export const { addMessage, setInitialMessages, prependMessages, clearMessages } = messagesSlice.actions;
+export default messagesSlice.reducer;

@@ -1,60 +1,51 @@
 // src/redux/messagesPaginationSlice.ts
-import type { MessagesPaginationState, MessagesActions } from '../types';
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import type { MessagesPaginationState } from '../types';
 
-const messagesPaginationReducer = (state: MessagesPaginationState, action: MessagesActions): MessagesPaginationState => {
-  switch (action.type) {
-    case 'messagesPagination/setLoading': {
+const initialState: MessagesPaginationState = {};
+
+const messagesPaginationSlice = createSlice({
+  name: 'messagesPagination',
+  initialState,
+  reducers: {
+    setLoading: (state, action: PayloadAction<{ chatroomId: string; isLoading: boolean }>) => {
       const { chatroomId, isLoading } = action.payload;
-      const existing = state[chatroomId] || { hasMore: true, page: 0, totalMessages: 0, isLoading: false };
-      return {
-        ...state,
-        [chatroomId]: {
-          ...existing,
-          isLoading,
-        },
-      };
-    }
-    case 'messagesPagination/updatePagination': {
+      if (!state[chatroomId]) {
+        state[chatroomId] = { hasMore: true, page: 0, totalMessages: 0, isLoading: false };
+      }
+      state[chatroomId].isLoading = isLoading;
+    },
+    updatePagination: (state, action: PayloadAction<{ chatroomId: string; hasMore: boolean; page: number; totalMessages: number }>) => {
       const { chatroomId, hasMore, page, totalMessages } = action.payload;
-      const existing = state[chatroomId] || { hasMore: true, page: 0, totalMessages: 0, isLoading: false };
-      return {
-        ...state,
-        [chatroomId]: {
-          ...existing,
-          hasMore,
-          page,
-          totalMessages,
-          isLoading: false,
-        },
-      };
-    }
-    case 'messagesPagination/resetPagination': {
+      if (!state[chatroomId]) {
+        state[chatroomId] = { hasMore: true, page: 0, totalMessages: 0, isLoading: false };
+      }
+      state[chatroomId].hasMore = hasMore;
+      state[chatroomId].page = page;
+      state[chatroomId].totalMessages = totalMessages;
+      state[chatroomId].isLoading = false;
+    },
+    resetPagination: (state, action: PayloadAction<{ chatroomId: string }>) => {
       const { chatroomId } = action.payload;
-      return {
-        ...state,
-        [chatroomId]: {
-          hasMore: true,
-          isLoading: false,
-          page: 0,
-          totalMessages: 0,
-        },
+      state[chatroomId] = {
+        hasMore: true,
+        isLoading: false,
+        page: 0,
+        totalMessages: 0,
       };
-    }
-    case 'messages/setInitialMessages': {
+    },
+    setInitialMessages: (state, action: PayloadAction<{ chatroomId: string; hasMore: boolean; totalMessages: number }>) => {
       const { chatroomId, hasMore, totalMessages } = action.payload;
-      return {
-        ...state,
-        [chatroomId]: {
-          hasMore,
-          isLoading: false,
-          page: 1,
-          totalMessages,
-        },
+      state[chatroomId] = {
+        hasMore,
+        isLoading: false,
+        page: 1,
+        totalMessages,
       };
-    }
-    default:
-      return state;
-  }
-};
+    },
+  },
+});
 
-export default messagesPaginationReducer;
+export const { setLoading, updatePagination, resetPagination, setInitialMessages } = messagesPaginationSlice.actions;
+export default messagesPaginationSlice.reducer;

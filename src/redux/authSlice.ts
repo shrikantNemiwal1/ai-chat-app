@@ -1,20 +1,45 @@
 // src/redux/authSlice.ts
-import type { AuthState, AuthActions } from '../types';
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
+import type { AuthState, User } from '../types';
 
-const authReducer = (state: AuthState, action: AuthActions): AuthState => {
-  switch (action.type) {
-    case 'auth/loginSuccess':
-      return { ...state, isAuthenticated: true, user: action.payload.user, otpVerified: true };
-    case 'auth/signUpSuccess':
-      return { ...state, isAuthenticated: true, user: action.payload.user, otpVerified: true };
-    case 'auth/logout':
-      return { ...state, isAuthenticated: false, user: null, otpVerified: false, otp: null, otpExpiry: null };
-    case 'auth/setOtp':
-      return { ...state, otp: action.payload.otp, otpExpiry: action.payload.otpExpiry };
-    case 'auth/clearOtp':
-      return { ...state, otp: null, otpExpiry: null };
-    default:
-      return state;
-  }
+const initialState: AuthState = {
+  isAuthenticated: false,
+  user: null,
+  otpVerified: false,
 };
-export default authReducer;
+
+const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    loginSuccess: (state, action: PayloadAction<{ user: User }>) => {
+      state.isAuthenticated = true;
+      state.user = action.payload.user;
+      state.otpVerified = true;
+    },
+    signUpSuccess: (state, action: PayloadAction<{ user: User }>) => {
+      state.isAuthenticated = true;
+      state.user = action.payload.user;
+      state.otpVerified = true;
+    },
+    logout: (state) => {
+      state.isAuthenticated = false;
+      state.user = null;
+      state.otpVerified = false;
+      state.otp = null;
+      state.otpExpiry = null;
+    },
+    setOtp: (state, action: PayloadAction<{ otp: string; otpExpiry: number }>) => {
+      state.otp = action.payload.otp;
+      state.otpExpiry = action.payload.otpExpiry;
+    },
+    clearOtp: (state) => {
+      state.otp = null;
+      state.otpExpiry = null;
+    },
+  },
+});
+
+export const { loginSuccess, signUpSuccess, logout, setOtp, clearOtp } = authSlice.actions;
+export default authSlice.reducer;
